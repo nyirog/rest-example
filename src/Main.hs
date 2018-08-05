@@ -7,7 +7,7 @@ import Data.Map
 import Data.Monoid ((<>))
 import GHC.Generics
 
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), object, (.=), withObject, (.:))
 import Web.Scotty
 import Network.HTTP.Types.Status
 
@@ -15,8 +15,14 @@ data User =  User { userName :: String }
            | NoUser
            deriving (Show, Generic)
 
-instance ToJSON User
-instance FromJSON User
+instance ToJSON User where
+    toJSON (User userName) = object ["name" .= toJSON userName]
+    toJSON NoUser = Null
+
+instance FromJSON User where
+    parseJSON = withObject "User" $ \o -> do
+        name_ <- o .: "name"
+        return (User name_)
 
 bob :: User
 bob = User { userName = "bob" }
