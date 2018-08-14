@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Control.Lens
+import Control.Applicative
 import Network.HTTP.Client
 import Data.Aeson.Lens (key, _String, _Object)
 import Text.ParserCombinators.ReadP
@@ -15,14 +16,23 @@ import qualified Data.Text as T
 
 server_url = "http://localhost:3000/"
 
-data Command = Get { url :: String } deriving Show
+data Command = Get { url :: String }
+             | Pop
+             deriving Show
 
-readCommand :: ReadP Command
-readCommand = do
+readGet:: ReadP Command
+readGet = do
     string "get"
     string " "
-    url <- munch (\char -> char >= 'a' && char <= 'z')
-    return (Get url)
+    url <- munch1 (\char -> char >= 'a' && char <= 'z')
+    return $ Get url
+
+readPop :: ReadP Command
+readPop = do
+    string "pop"
+    return Pop
+
+readCommand = readGet <|> readPop
 
 type CommandResult = Either String Command
 
@@ -48,6 +58,9 @@ loop session stack = do
                 Left msg -> do
                     print msg
                     loop session stack
+        Right (Pop) -> do
+            print $ head stack
+            loop session (tail stack)
 
 
 type ResponseResult = Either String (Response LBS.ByteString)
