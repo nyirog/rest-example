@@ -17,6 +17,7 @@ import qualified Data.Text as T
 server_url = "http://localhost:3000/"
 
 data Command = Get { url :: String }
+             | Print
              | Pop
              deriving Show
 
@@ -32,7 +33,12 @@ readPop = do
     string "pop"
     return Pop
 
-readCommand = readGet <|> readPop
+readPrint :: ReadP Command
+readPrint = do
+    string "print"
+    return Print
+
+readCommand = readGet <|> readPop <|> readPrint
 
 type CommandResult = Either String Command
 
@@ -61,6 +67,9 @@ loop session stack = do
         Right (Pop) -> do
             print $ head stack
             loop session (tail stack)
+        Right (Print) -> do
+            print stack
+            loop session stack
 
 
 type ResponseResult = Either String (Response LBS.ByteString)
