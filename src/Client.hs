@@ -27,8 +27,18 @@ readGet:: ReadP Command
 readGet = do
     string "get"
     string " "
-    url <- munch1 (\char -> char >= 'a' && char <= 'z')
+    url <- munch1 isUrl
     return $ Get url
+
+readPost :: ReadP Command
+readPost = do
+    string "post"
+    string " "
+    url <- munch1 isUrl
+    return $ Post url
+
+isUrl :: Char -> Bool
+isUrl char = char == '/' || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 
 readPop :: ReadP Command
 readPop = do
@@ -39,13 +49,6 @@ readPrint :: ReadP Command
 readPrint = do
     string "print"
     return Print
-
-readPost :: ReadP Command
-readPost = do
-    string "post"
-    string " "
-    url <- munch1 (\char -> char >= 'a' && char <= 'z')
-    return $ Post url
 
 readCommand = readGet <|> readPop <|> readPrint <|> readPost
 
