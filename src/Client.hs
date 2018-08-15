@@ -6,6 +6,7 @@ import Network.HTTP.Client
 import Data.Aeson.Lens (key, _String, _Object)
 import Text.ParserCombinators.ReadP
 
+import qualified Network.Wreq.Types as WT
 import qualified Network.Wreq as W
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as BSC
@@ -19,6 +20,7 @@ server_url = "http://localhost:3000/"
 data Command = Get { url :: String }
              | Print
              | Pop
+             | Post { url :: String }
              deriving Show
 
 readGet:: ReadP Command
@@ -38,7 +40,14 @@ readPrint = do
     string "print"
     return Print
 
-readCommand = readGet <|> readPop <|> readPrint
+readPost :: ReadP Command
+readPost = do
+    string "post"
+    string " "
+    url <- munch1 (\char -> char >= 'a' && char <= 'z')
+    return $ Post url
+
+readCommand = readGet <|> readPop <|> readPrint <|> readPost
 
 type CommandResult = Either String Command
 
@@ -64,6 +73,16 @@ loop session stack = do
                 Left msg -> do
                     print msg
                     loop session stack
+        Right (Post u) -> do
+            result <- safePost session (server_url ++ u) (head stack)
+            case result of
+                Right response -> do
+                    let body = response ^. W.responseBody
+                    print body
+                    loop session (body:stack)
+                Left msg -> do
+                    print msg
+                    loop session stack
         Right (Pop) -> do
             print $ head stack
             loop session (tail stack)
@@ -76,6 +95,9 @@ type ResponseResult = Either String (Response LBS.ByteString)
 
 safeGet :: S.Session -> String -> IO ResponseResult
 safeGet session url = (Right <$> S.get session url) `E.catch` handler
+
+safePost :: WT.Postable a => S.Session -> String -> a -> IO ResponseResult
+safePost session url postData = (Right <$> S.post session url postData) `E.catch` handler
 
 handler :: HttpException -> IO ResponseResult
 handler (HttpExceptionRequest _ (StatusCodeException r _)) = return $ Left $ BSC.unpack (r ^. W.responseStatus . W.statusMessage)
