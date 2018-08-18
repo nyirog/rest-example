@@ -60,7 +60,7 @@ readView = do
     return $ View path
 
 isPath :: Char -> Bool
-isPath char = char == '.' || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
+isPath char = (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 
 readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView
 
