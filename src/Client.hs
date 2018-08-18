@@ -49,7 +49,7 @@ readPop = do
 
 readPrint :: ReadP Command
 readPrint = do
-    string "print"
+    string "list"
     return Print
 
 readView :: ReadP Command
