@@ -3,7 +3,8 @@
 import Control.Lens
 import Control.Applicative
 import Network.HTTP.Client
-import Data.Aeson.Lens (key, _String, _Object)
+import Data.Aeson
+import Data.Aeson.Lens
 import Text.ParserCombinators.ReadP
 
 import qualified Network.Wreq.Types as WT
@@ -18,9 +19,10 @@ import qualified Data.Text as T
 server_url = "http://localhost:3000/"
 
 data Command = Get { url :: String }
+             | Post { url :: String }
              | Print
              | Pop
-             | Post { url :: String }
+             | View { path :: String }
              deriving Show
 
 readGet:: ReadP Command
@@ -50,7 +52,17 @@ readPrint = do
     string "print"
     return Print
 
-readCommand = readGet <|> readPop <|> readPrint <|> readPost
+readView :: ReadP Command
+readView = do
+    string "view"
+    string " "
+    path <- munch1 isPath
+    return $ View path
+
+isPath :: Char -> Bool
+isPath char = char == '.' || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
+
+readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView
 
 type CommandResult = Either String Command
 
@@ -60,6 +72,7 @@ parseMaybe parser input =
         [] -> Left "Wrong command"
         ((r, _): _) -> Right r
 
+loop :: S.Session -> [LBS.ByteString] -> IO ()
 loop session stack = do
     line <- getLine
     case parseMaybe readCommand line of
@@ -85,6 +98,16 @@ loop session stack = do
                     loop session (body:stack)
                 Left msg -> do
                     print msg
+                    loop session stack
+        Right (View p) -> do
+            let h = head stack
+            case h ^? key (T.pack p) of
+                Just l -> do
+                    let v = encode l
+                    print v
+                    loop session (v:stack)
+                Nothing -> do
+                    print $ "Invalid key: " ++ p
                     loop session stack
         Right (Pop) -> do
             print $ head stack
