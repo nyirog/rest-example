@@ -6,12 +6,14 @@ import Network.HTTP.Client
 import Data.Aeson
 import Data.Aeson.Lens
 import Text.ParserCombinators.ReadP
+import GHC.Word
 
 import qualified Network.Wreq.Types as WT
 import qualified Network.Wreq as W
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Internal as BS (c2w, w2c)
 import qualified Network.Wreq.Session as S
 import qualified Data.Text as T
 
@@ -23,6 +25,7 @@ data Command = Get { url :: String }
              | Print
              | Pop
              | View { path :: String }
+             | Set { path :: String, value :: String}
              deriving Show
 
 readGet:: ReadP Command
@@ -59,10 +62,22 @@ readView = do
     path <- munch1 isPath
     return $ View path
 
+readSet :: ReadP Command
+readSet = do
+    string "set"
+    string " "
+    path <- munch1 isPath
+    string " "
+    value <- munch1 isValue
+    return $ Set path value
+
 isPath :: Char -> Bool
 isPath char = (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 
-readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView
+isValue :: Char -> Bool
+isValue char = char == '"' || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
+
+readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView <|> readSet
 
 type CommandResult = Either String Command
 
@@ -106,6 +121,16 @@ loop session stack = do
                     let v = encode l
                     print v
                     loop session (v:stack)
+                Nothing -> do
+                    print $ "Invalid key: " ++ p
+                    loop session stack
+        Right (Set p v) -> do
+            let h = head stack
+            case decode (LBS.pack (map BS.c2w v)) of
+                Just v' -> do
+                    let h' = h & key (T.pack p) .~ v'
+                    print h'
+                    loop session (h':stack)
                 Nothing -> do
                     print $ "Invalid key: " ++ p
                     loop session stack
