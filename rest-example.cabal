@@ -41,14 +41,3 @@ executable rest-client
                       ,wreq
                       ,http-client
                       ,bytestring
-
-executable rest-lens
-  hs-source-dirs:      src
-  main-is:             Lens.hs
-  default-language:    Haskell2010
-  build-depends:       base >= 4.7 && < 5
-                      ,text
-                      ,aeson
-                      ,lens
-                      ,lens-aeson
-                      ,bytestring
