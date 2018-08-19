@@ -26,6 +26,7 @@ data Command = Get { url :: String }
              | Pop
              | View { path :: String }
              | Set { path :: String, value :: String}
+             | InvalidCommand
              deriving Show
 
 readGet:: ReadP Command
@@ -79,68 +80,71 @@ isValue char = char == '"' || (char >= 'a' && char <= 'z') || (char >= '0' && ch
 
 readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView <|> readSet
 
-type CommandResult = Either String Command
-
-parseMaybe :: ReadP Command -> String -> CommandResult
-parseMaybe parser input =
+parseCommand :: ReadP Command -> String -> Command
+parseCommand parser input =
     case readP_to_S parser input of
-        [] -> Left "Wrong command"
-        ((r, _): _) -> Right r
+        [] -> InvalidCommand
+        ((r, _): _) -> r
 
-loop :: S.Session -> [LBS.ByteString] -> IO ()
-loop session stack = do
-    line <- getLine
-    case parseMaybe readCommand line of
+data State = State {session :: S.Session, stack :: [LBS.ByteString]}
+
+execute :: Command -> State -> IO ()
+
+execute InvalidCommand state = do
+    print "Wrong command"
+    loop state
+
+execute (Get u) (State session stack) = do
+    result <- safeGet session (server_url ++ u)
+    case result of
+        Right response -> do
+            let body = response ^. W.responseBody
+            print body
+            loop $ State session (body:stack)
         Left msg -> do
             print msg
-            loop session stack
-        Right (Get u) -> do
-            result <- safeGet session (server_url ++ u)
-            case result of
-                Right response -> do
-                    let body = response ^. W.responseBody
-                    print body
-                    loop session (body:stack)
-                Left msg -> do
-                    print msg
-                    loop session stack
-        Right (Post u) -> do
-            result <- safePost session (server_url ++ u) (head stack)
-            case result of
-                Right response -> do
-                    let body = response ^. W.responseBody
-                    print body
-                    loop session (body:stack)
-                Left msg -> do
-                    print msg
-                    loop session stack
-        Right (View p) -> do
-            let h = head stack
-            case h ^? key (T.pack p) of
-                Just l -> do
-                    let v = encode l
-                    print v
-                    loop session (v:stack)
-                Nothing -> do
-                    print $ "Invalid key: " ++ p
-                    loop session stack
-        Right (Set p v) -> do
-            let h = head stack
-            case decode (LBS.pack (map BS.c2w v)) of
-                Just v' -> do
-                    let h' = h & key (T.pack p) .~ v'
-                    print h'
-                    loop session (h':stack)
-                Nothing -> do
-                    print $ "Invalid key: " ++ p
-                    loop session stack
-        Right (Pop) -> do
-            print $ head stack
-            loop session (tail stack)
-        Right (Print) -> do
-            print stack
-            loop session stack
+            loop $ State session stack
 
+execute (Post u) (State session stack) = do
+    result <- safePost session (server_url ++ u) (head stack)
+    case result of
+        Right response -> do
+            let body = response ^. W.responseBody
+            print body
+            loop $ State session (body:stack)
+        Left msg -> do
+            print msg
+            loop $ State session stack
+
+execute (View p) (State session stack) = do
+    let h = head stack
+    case h ^? key (T.pack p) of
+        Just l -> do
+            let v = encode l
+            print v
+            loop $ State session (v:stack)
+        Nothing -> do
+            print $ "Invalid key: " ++ p
+            loop $ State session stack
+
+execute (Set p v) (State session stack) = do
+    let h = head stack
+    case decode (LBS.pack (map BS.c2w v)) of
+        Just v' -> do
+            let h' = h & key (T.pack p) .~ v'
+            print h'
+            loop $ State session (h':stack)
+        Nothing -> do
+            print $ "Invalid key: " ++ p
+            loop $ State session stack
+
+execute Pop (State session stack) = do
+    print $ head stack
+    loop $ State session (tail stack)
+
+execute Print (State session stack) = do
+    print stack
+    loop $ State session stack
 
 type ResponseResult = Either String (Response LBS.ByteString)
 
@@ -151,11 +155,17 @@ safePost :: WT.Postable a => S.Session -> String -> a -> IO ResponseResult
 safePost session url postData = (Right <$> S.post session url postData) `E.catch` handler
 
 handler :: HttpException -> IO ResponseResult
-handler (HttpExceptionRequest _ (StatusCodeException r _)) = return $ Left $ BSC.unpack (r ^. W.responseStatus . W.statusMessage)
+handler (HttpExceptionRequest _ (StatusCodeException r _)) =
+    return $ Left $ BSC.unpack (r ^. W.responseStatus . W.statusMessage)
 
+loop :: State -> IO ()
+loop (State session stack) = do
+    line <- getLine
+    let command = parseCommand readCommand line
+    execute command (State session stack)
 
 main :: IO ()
 main = do
     session <- S.newSession
     let stack = []
-    loop session stack
+    loop $ State session stack
