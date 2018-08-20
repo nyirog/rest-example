@@ -8,7 +8,6 @@ import Data.Aeson.Lens
 import Data.Aeson.Encode.Pretty
 import Text.ParserCombinators.ReadP
 import Data.Text.Encoding
-import Data.List
 
 import qualified Network.Wreq.Types as WT
 import qualified Network.Wreq as W
@@ -166,13 +165,18 @@ execute Pop (State session stack) = do
     return $ State session (tail stack)
 
 execute Print (State session stack) = do
-    putStrLn $ "[\n" ++ (intercalate ",\n" (pretty <$> stack)) ++ "\n]"
+    putStrLn "["
+    putStrLn $ lbsToString (LBS.intercalate ",\n" (prettyLBS <$> stack))
+    putStrLn "]"
     return $ State session stack
 
 pretty :: LBS.ByteString -> String
-pretty s = case decode s of
-    Just v -> lbsToString $ encodePretty (v :: Value)
-    Nothing -> lbsToString s
+pretty s = lbsToString $ prettyLBS s
+
+prettyLBS :: LBS.ByteString -> LBS.ByteString
+prettyLBS s = case decode s of
+    Just v -> encodePretty (v :: Value)
+    Nothing -> s
 
 lbsToString :: LBS.ByteString -> String
 lbsToString s = T.unpack $ decodeUtf8 $ LBS.toStrict s
