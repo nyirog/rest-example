@@ -6,14 +6,13 @@ import Network.HTTP.Client
 import Data.Aeson
 import Data.Aeson.Lens
 import Text.ParserCombinators.ReadP
-import GHC.Word
 
 import qualified Network.Wreq.Types as WT
 import qualified Network.Wreq as W
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Internal as BS (c2w, w2c)
+import qualified Data.ByteString.Internal as BS (c2w)
 import qualified Network.Wreq.Session as S
 import qualified Data.Text as T
 
