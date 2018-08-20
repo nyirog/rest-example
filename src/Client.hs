@@ -26,8 +26,14 @@ data Command = Get { url :: String }
              | Pop
              | View { path :: String }
              | Set { path :: String, value :: String}
+             | Help
              | InvalidCommand
              deriving Show
+
+readHelp :: ReadP Command
+readHelp = do
+    string "help"
+    return Help
 
 readGet:: ReadP Command
 readGet = do
@@ -78,7 +84,7 @@ isPath char = (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 isValue :: Char -> Bool
 isValue char = char == '"' || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9')
 
-readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView <|> readSet
+readCommand = readGet <|> readPop <|> readPrint <|> readPost <|> readView <|> readSet <|> readHelp
 
 parseCommand :: ReadP Command -> String -> Command
 parseCommand parser input =
@@ -92,6 +98,20 @@ execute :: Command -> State -> IO State
 
 execute InvalidCommand state = do
     print "Wrong command"
+    return state
+
+execute Help state = do
+    putStrLn (
+        "rest-client\n\n"
+     ++ "\tInteractive REST client which fetches json data from " ++ server_url ++ "\n"
+     ++ "\tand stores it in a stack for further manipulation (view, set) and to post it back.\n\n"
+     ++ "\thead refers to the first element of the stack which can be manipulated or posted\n\n"
+     ++ "get <url>\n\tfetch the url and save the response to the head of the stack\n"
+     ++ "post <url>\n\tpost the head of the stack to the url\n"
+     ++ "list\n\tprint the stack\n"
+     ++ "pop\n\tremove the head of the stack\n"
+     ++ "view <key>\n\tcreate a new stack element from the value of the key of the stack-head\n"
+     ++ "set <key> <json-data>\n\tcreate a new stack-head by changing the value of the current head under the given key")
     return state
 
 execute (Get u) (State session stack) = do
