@@ -36,6 +36,7 @@ executable rest-client
   build-depends:       base >= 4.7 && < 5
                       ,text
                       ,aeson
+                      ,aeson-pretty
                       ,lens
                       ,lens-aeson
                       ,wreq

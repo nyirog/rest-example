@@ -5,7 +5,10 @@ import Control.Applicative
 import Network.HTTP.Client
 import Data.Aeson
 import Data.Aeson.Lens
+import Data.Aeson.Encode.Pretty
 import Text.ParserCombinators.ReadP
+import Data.Text.Encoding
+import Data.List
 
 import qualified Network.Wreq.Types as WT
 import qualified Network.Wreq as W
@@ -96,7 +99,7 @@ data State = State {session :: S.Session, stack :: [LBS.ByteString]}
 execute :: Command -> State -> IO State
 
 execute InvalidCommand state = do
-    print "Wrong command"
+    putStrLn "Wrong command"
     return state
 
 execute Help state = do
@@ -118,10 +121,10 @@ execute (Get u) (State session stack) = do
     case result of
         Right response -> do
             let body = response ^. W.responseBody
-            print body
+            putStrLn $ pretty body
             return $ State session (body:stack)
         Left msg -> do
-            print msg
+            putStrLn msg
             return $ State session stack
 
 execute (Post u) (State session stack) = do
@@ -129,10 +132,10 @@ execute (Post u) (State session stack) = do
     case result of
         Right response -> do
             let body = response ^. W.responseBody
-            print body
+            putStrLn $ pretty body
             return $ State session (body:stack)
         Left msg -> do
-            print msg
+            putStrLn msg
             return $ State session stack
 
 execute (View p) (State session stack) = do
@@ -140,10 +143,10 @@ execute (View p) (State session stack) = do
     case h ^? key (T.pack p) of
         Just l -> do
             let v = encode l
-            print v
+            putStrLn $ pretty v
             return $ State session (v:stack)
         Nothing -> do
-            print $ "Invalid key: " ++ p
+            putStrLn $ "Invalid key: " ++ p
             return $ State session stack
 
 execute (Set p v) (State session stack) = do
@@ -151,19 +154,28 @@ execute (Set p v) (State session stack) = do
     case decode (LBS.pack (map BS.c2w v)) of
         Just v' -> do
             let h' = h & key (T.pack p) .~ v'
-            print h'
+            putStrLn $ pretty h'
             return $ State session (h':stack)
         Nothing -> do
-            print $ "Invalid key: " ++ p
+            putStrLn $ "Invalid key: " ++ p
             return $ State session stack
 
 execute Pop (State session stack) = do
-    print $ head stack
+    let h = head stack
+    putStrLn $ pretty h
     return $ State session (tail stack)
 
 execute Print (State session stack) = do
-    print stack
+    putStrLn $ "[\n" ++ (intercalate ",\n" (pretty <$> stack)) ++ "\n]"
     return $ State session stack
+
+pretty :: LBS.ByteString -> String
+pretty s = case decode s of
+    Just v -> lbsToString $ encodePretty (v :: Value)
+    Nothing -> lbsToString s
+
+lbsToString :: LBS.ByteString -> String
+lbsToString s = T.unpack $ decodeUtf8 $ LBS.toStrict s
 
 type ResponseResult = Either String (Response LBS.ByteString)
 
