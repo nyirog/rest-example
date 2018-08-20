@@ -88,11 +88,11 @@ parseCommand parser input =
 
 data State = State {session :: S.Session, stack :: [LBS.ByteString]}
 
-execute :: Command -> State -> IO ()
+execute :: Command -> State -> IO State
 
 execute InvalidCommand state = do
     print "Wrong command"
-    loop state
+    return state
 
 execute (Get u) (State session stack) = do
     result <- safeGet session (server_url ++ u)
@@ -100,10 +100,10 @@ execute (Get u) (State session stack) = do
         Right response -> do
             let body = response ^. W.responseBody
             print body
-            loop $ State session (body:stack)
+            return $ State session (body:stack)
         Left msg -> do
             print msg
-            loop $ State session stack
+            return $ State session stack
 
 execute (Post u) (State session stack) = do
     result <- safePost session (server_url ++ u) (head stack)
@@ -111,10 +111,10 @@ execute (Post u) (State session stack) = do
         Right response -> do
             let body = response ^. W.responseBody
             print body
-            loop $ State session (body:stack)
+            return $ State session (body:stack)
         Left msg -> do
             print msg
-            loop $ State session stack
+            return $ State session stack
 
 execute (View p) (State session stack) = do
     let h = head stack
@@ -122,10 +122,10 @@ execute (View p) (State session stack) = do
         Just l -> do
             let v = encode l
             print v
-            loop $ State session (v:stack)
+            return $ State session (v:stack)
         Nothing -> do
             print $ "Invalid key: " ++ p
-            loop $ State session stack
+            return $ State session stack
 
 execute (Set p v) (State session stack) = do
     let h = head stack
@@ -133,18 +133,18 @@ execute (Set p v) (State session stack) = do
         Just v' -> do
             let h' = h & key (T.pack p) .~ v'
             print h'
-            loop $ State session (h':stack)
+            return $ State session (h':stack)
         Nothing -> do
             print $ "Invalid key: " ++ p
-            loop $ State session stack
+            return $ State session stack
 
 execute Pop (State session stack) = do
     print $ head stack
-    loop $ State session (tail stack)
+    return $ State session (tail stack)
 
 execute Print (State session stack) = do
     print stack
-    loop $ State session stack
+    return $ State session stack
 
 type ResponseResult = Either String (Response LBS.ByteString)
 
@@ -158,13 +158,14 @@ handler :: HttpException -> IO ResponseResult
 handler (HttpExceptionRequest _ (StatusCodeException r _)) =
     return $ Left $ BSC.unpack (r ^. W.responseStatus . W.statusMessage)
 
-loop :: State -> IO ()
+loop :: State -> IO State
 loop (State session stack) = do
     line <- getLine
     let command = parseCommand readCommand line
-    execute command (State session stack)
+    newState <- execute command (State session stack)
+    loop newState
 
-main :: IO ()
+main :: IO State
 main = do
     session <- S.newSession
     let stack = []
